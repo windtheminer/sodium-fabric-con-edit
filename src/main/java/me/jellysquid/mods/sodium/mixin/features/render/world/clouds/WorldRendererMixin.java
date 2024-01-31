@@ -31,13 +31,14 @@ public class WorldRendererMixin {
      * @author jellysquid3
      * @reason Optimize cloud rendering
      */
+    // TODO 24w05a
     @Overwrite
-    public void renderClouds(MatrixStack matrices, Matrix4f projectionMatrix, float tickDelta, double x, double y, double z) {
+    public void renderClouds(MatrixStack matrices, Matrix4f modelMatrix, Matrix4f projectionMatrix, float tickDelta, double x, double y, double z) {
         if (this.cloudRenderer == null) {
             this.cloudRenderer = new CloudRenderer(this.client.getResourceManager());
         }
 
-        this.cloudRenderer.render(this.world, this.client.player, matrices, projectionMatrix, this.ticks, tickDelta, x, y, z);
+        this.cloudRenderer.render(this.world, this.client.player, modelMatrix, projectionMatrix, this.ticks, tickDelta, x, y, z);
     }
 
     @Inject(method = "reload(Lnet/minecraft/resource/ResourceManager;)V", at = @At("RETURN"))

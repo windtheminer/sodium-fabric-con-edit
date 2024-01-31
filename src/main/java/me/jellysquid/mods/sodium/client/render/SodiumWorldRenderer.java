@@ -26,6 +26,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.*;
 import net.minecraft.util.profiler.Profiler;
+import org.joml.Matrix4f;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -219,8 +220,8 @@ public class SodiumWorldRenderer {
     /**
      * Performs a render pass for the given {@link RenderLayer} and draws all visible chunks for it.
      */
-    public void drawChunkLayer(RenderLayer renderLayer, MatrixStack matrixStack, double x, double y, double z) {
-        ChunkRenderMatrices matrices = ChunkRenderMatrices.from(matrixStack);
+    public void drawChunkLayer(RenderLayer renderLayer, Matrix4f modelMatrix, double x, double y, double z) {
+        ChunkRenderMatrices matrices = ChunkRenderMatrices.from(modelMatrix);
 
         if (renderLayer == RenderLayer.getSolid()) {
             this.renderSectionManager.renderLayer(matrices, DefaultTerrainRenderPasses.SOLID, x, y, z);
@@ -254,7 +255,7 @@ public class SodiumWorldRenderer {
         ChunkTracker.forEachChunk(tracker.getReadyChunks(), this.renderSectionManager::onChunkAdded);
     }
 
-    public void renderBlockEntities(MatrixStack matrices,
+    public void renderBlockEntities(Matrix4f matrices,
                                     BufferBuilderStorage bufferBuilders,
                                     Long2ObjectMap<SortedSet<BlockBreakingInfo>> blockBreakingProgressions,
                                     Camera camera,
@@ -265,11 +266,12 @@ public class SodiumWorldRenderer {
         double x = cameraPos.getX();
         double y = cameraPos.getY();
         double z = cameraPos.getZ();
+        MatrixStack matrixStack = new MatrixStack();
 
         BlockEntityRenderDispatcher blockEntityRenderer = MinecraftClient.getInstance().getBlockEntityRenderDispatcher();
 
-        this.renderBlockEntities(matrices, bufferBuilders, blockBreakingProgressions, tickDelta, immediate, x, y, z, blockEntityRenderer);
-        this.renderGlobalBlockEntities(matrices, bufferBuilders, blockBreakingProgressions, tickDelta, immediate, x, y, z, blockEntityRenderer);
+        this.renderBlockEntities(matrixStack, bufferBuilders, blockBreakingProgressions, tickDelta, immediate, x, y, z, blockEntityRenderer);
+        this.renderGlobalBlockEntities(matrixStack, bufferBuilders, blockBreakingProgressions, tickDelta, immediate, x, y, z, blockEntityRenderer);
     }
 
     private void renderBlockEntities(MatrixStack matrices,
@@ -360,7 +362,7 @@ public class SodiumWorldRenderer {
 
                 MatrixStack.Entry entry = matrices.peek();
                 VertexConsumer transformer = new OverlayVertexConsumer(bufferBuilder,
-                        entry.getPositionMatrix(), entry.getNormalMatrix(), 1.0f);
+                        entry, 1.0f);
 
                 consumer = (layer) -> layer.hasCrumbling() ? VertexConsumers.union(transformer, immediate.getBuffer(layer)) : immediate.getBuffer(layer);
             }

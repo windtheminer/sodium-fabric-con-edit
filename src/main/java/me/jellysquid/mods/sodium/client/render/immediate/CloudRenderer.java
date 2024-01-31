@@ -63,7 +63,7 @@ public class CloudRenderer {
         this.reloadTextures(factory);
     }
 
-    public void render(@Nullable ClientWorld world, ClientPlayerEntity player, MatrixStack matrices, Matrix4f projectionMatrix, float ticks, float tickDelta, double cameraX, double cameraY, double cameraZ) {
+    public void render(@Nullable ClientWorld world, ClientPlayerEntity player, Matrix4f modelMatrix, Matrix4f projectionMatrix, float ticks, float tickDelta, double cameraX, double cameraY, double cameraZ) {
         if (world == null) {
             return;
         }
@@ -138,9 +138,7 @@ public class CloudRenderer {
 
         RenderSystem.setShaderColor((float) color.x, (float) color.y, (float) color.z, 0.8f);
 
-        matrices.push();
-
-        Matrix4f modelViewMatrix = matrices.peek().getPositionMatrix();
+        Matrix4f modelViewMatrix = new Matrix4f(modelMatrix);
         modelViewMatrix.translate(-translateX, cloudHeight - (float) cameraY + 0.33F, -translateZ);
 
         // PASS 1: Set up depth buffer
@@ -159,8 +157,6 @@ public class CloudRenderer {
         RenderSystem.colorMask(true, true, true, true);
 
         this.vertexBuffer.draw(modelViewMatrix, projectionMatrix, this.shader);
-
-        matrices.pop();
 
         VertexBuffer.unbind();
 
