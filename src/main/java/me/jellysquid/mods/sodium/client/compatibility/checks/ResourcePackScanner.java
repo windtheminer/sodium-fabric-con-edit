@@ -2,32 +2,42 @@ package me.jellysquid.mods.sodium.client.compatibility.checks;
 
 import me.jellysquid.mods.sodium.client.gui.console.Console;
 import me.jellysquid.mods.sodium.client.gui.console.message.MessageLevel;
-import net.minecraft.resource.ResourceManager;
-import net.minecraft.resource.ResourcePack;
-import net.minecraft.resource.ResourceType;
+import net.minecraft.resource.*;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 public class ResourcePackScanner {
+    private static final Logger LOGGER = LoggerFactory.getLogger("Sodium-ResourcePackScanner");
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("Sodium-InGameChecks");
-    private static final List<String> VSH_FSH_BLACKLIST = Arrays.asList(
-            "rendertype_solid.vsh", "rendertype_solid.fsh",
-            "rendertype_cutout_mipped.vsh", "rendertype_cutout_mipped.fsh",
-            "rendertype_cutout.vsh", "rendertype_cutout.fsh",
-            "rendertype_translucent.vsh", "rendertype_translucent.fsh",
-            "rendertype_tripwire.vsh", "rendertype_tripwire.fsh"
+    private static final Set<String> SHADER_PROGRAM_BLACKLIST = Set.of(
+            "rendertype_solid.vsh",
+            "rendertype_solid.fsh",
+            "rendertype_solid.json",
+            "rendertype_cutout_mipped.vsh",
+            "rendertype_cutout_mipped.fsh",
+            "rendertype_cutout_mipped.json",
+            "rendertype_cutout.vsh",
+            "rendertype_cutout.fsh",
+            "rendertype_cutout.json",
+            "rendertype_translucent.vsh",
+            "rendertype_translucent.fsh",
+            "rendertype_translucent.json",
+            "rendertype_tripwire.vsh",
+            "rendertype_tripwire.fsh",
+            "rendertype_tripwire.json"
     );
-    private static final List<String> GLSL_BLACKLIST = Arrays.asList(
+
+    private static final Set<String> SHADER_INCLUDE_BLACKLIST = Set.of(
             "light.glsl",
             "fog.glsl"
     );
@@ -40,85 +50,137 @@ public class ResourcePackScanner {
      * Detailed information on shader files replaced by resource packs is printed in the client log.
      */
     public static void checkIfCoreShaderLoaded(ResourceManager manager) {
-        HashMap<String, MessageLevel> detectedResourcePacks = new HashMap<>();
-        var customResourcePacks = manager.streamResourcePacks();
+        var outputs = manager.streamResourcePacks()
+                .filter(ResourcePackScanner::isExternalResourcePack)
+                .map(ResourcePackScanner::scanResources)
+                .toList();
 
-        customResourcePacks.forEach(resourcePack -> {
-            // Omit 'vanilla' and 'fabric' resource packs
-            if (!resourcePack.getName().equals("vanilla") && !resourcePack.getName().equals("fabric")) {
-                var resourcePackName = resourcePack.getName();
-                var ignoredShaders = determineIgnoredShaders(resourcePack);
+        printToasts(outputs);
+        printCompatibilityReport(outputs);
+    }
 
-                resourcePack.findResources(ResourceType.CLIENT_RESOURCES, Identifier.DEFAULT_NAMESPACE, "shaders", (path, ignored) -> {
-                    // Trim full shader file path to only contain the filename
-                    var shaderName = path.getPath().substring(path.getPath().lastIndexOf('/') + 1);
+    private static void printToasts(Collection<ScannedResourcePack> resourcePacks) {
+        var incompatibleResourcePacks = resourcePacks.stream()
+                .filter((pack) -> !pack.shaderPrograms.isEmpty())
+                .toList();
 
-                    // Check if the pack has already acknowledged the warnings in this file,
-                    // in this case we report a different info log about the situation
-                    if (ignoredShaders.contains(shaderName)) {
-                        if (VSH_FSH_BLACKLIST.contains(shaderName)) {
-                            LOGGER.info("Resource pack '{}' replaces core shader '{}' but indicates it can be ignored", resourcePackName, shaderName);
-                        }
+        var likelyIncompatibleResourcePacks = resourcePacks.stream()
+                .filter((pack) -> !pack.shaderIncludes.isEmpty())
+                .toList();
 
-                        if (GLSL_BLACKLIST.contains(shaderName)) {
-                            LOGGER.info("Resource pack '{}' replaces shader '{}' but indicates it can be ignored", resourcePackName, shaderName);
-                        }
-                        return;
-                    }
+        boolean shown = false;
 
-                    if (VSH_FSH_BLACKLIST.contains(shaderName)) {
+        if (!incompatibleResourcePacks.isEmpty()) {
+            showConsoleMessage(Text.translatable("sodium.console.core_shaders_error"), MessageLevel.SEVERE);
 
-                        if (!detectedResourcePacks.containsKey(resourcePackName)) {
-                            detectedResourcePacks.put(resourcePackName, MessageLevel.SEVERE);
-                        } else if (detectedResourcePacks.get(resourcePackName) == MessageLevel.WARN) {
-                            detectedResourcePacks.replace(resourcePackName, MessageLevel.SEVERE);
-                        }
+            for (var entry : incompatibleResourcePacks) {
+                showConsoleMessage(Text.literal(getResourcePackName(entry.resourcePack)), MessageLevel.SEVERE);
+            }
 
-                        LOGGER.error("Resource pack '{}' replaces core shader '{}'", resourcePackName, shaderName);
-                    }
+            shown = true;
+        }
 
-                    if (GLSL_BLACKLIST.contains(shaderName)) {
+        if (!likelyIncompatibleResourcePacks.isEmpty()) {
+            showConsoleMessage(Text.translatable("sodium.console.core_shaders_warn"), MessageLevel.WARN);
 
-                        if (!detectedResourcePacks.containsKey(resourcePackName)) {
-                            detectedResourcePacks.put(resourcePackName, MessageLevel.WARN);
-                        }
+            for (var entry : likelyIncompatibleResourcePacks) {
+                showConsoleMessage(Text.literal(getResourcePackName(entry.resourcePack)), MessageLevel.WARN);
+            }
 
-                        LOGGER.error("Resource pack '{}' replaces shader '{}'", resourcePackName, shaderName);
+            shown = true;
+        }
 
-                    }
-                });
+        if (shown) {
+            showConsoleMessage(Text.translatable("sodium.console.core_shaders_info"), MessageLevel.INFO);
+        }
+    }
+
+    private static void printCompatibilityReport(Collection<ScannedResourcePack> scanResults) {
+        var builder = new StringBuilder();
+
+        for (var entry : scanResults) {
+            if (entry.shaderPrograms.isEmpty() && entry.shaderIncludes.isEmpty()) {
+                continue;
+            }
+
+            builder.append("- Resource pack: ")
+                    .append(getResourcePackName(entry.resourcePack))
+                    .append("\n");
+
+            if (!entry.shaderPrograms.isEmpty()) {
+                emitProblem(builder,
+                        "The resource pack replaces terrain shaders, which are not supported",
+                        "https://github.com/CaffeineMC/sodium-fabric/wiki/Resource-Packs",
+                        entry.shaderPrograms);
+            }
+
+            if (!entry.shaderIncludes.isEmpty()) {
+                emitProblem(builder,
+                        "The resource pack modifies shader include files, which are not fully supported",
+                        "https://github.com/CaffeineMC/sodium-fabric/wiki/Resource-Packs",
+                        entry.shaderIncludes);
+            }
+        }
+
+        if (!builder.isEmpty()) {
+            LOGGER.error("The following compatibility issues were found with installed resource packs:\n{}", builder);
+        }
+    }
+
+    private static void emitProblem(StringBuilder builder, String description, String url, List<String> resources) {
+        builder.append("\t- Problem found: ").append("\n");
+        builder.append("\t\t- Description:\n\t\t\t").append(description).append("\n");
+        builder.append("\t\t- More information: ").append(url).append("\n");
+        builder.append("\t\t- Files: ").append("\n");
+
+        for (var resource : resources) {
+            builder.append("\t\t\t- ").append(resource).append("\n");
+        }
+    }
+
+    @NotNull
+    private static ScannedResourcePack scanResources(ResourcePack resourcePack) {
+        final var ignoredShaders = determineIgnoredShaders(resourcePack);
+
+        if (!ignoredShaders.isEmpty()) {
+            LOGGER.warn("Resource pack '{}' indicates the following shaders should be ignored: {}",
+                    getResourcePackName(resourcePack), String.join(", ", ignoredShaders));
+        }
+
+        final var unsupportedShaderPrograms = new ArrayList<String>();
+        final var unsupportedShaderIncludes = new ArrayList<String>();
+
+        resourcePack.findResources(ResourceType.CLIENT_RESOURCES, Identifier.DEFAULT_NAMESPACE, "shaders", (identifier, supplier) -> {
+            // Trim full shader file path to only contain the filename
+            final var path = identifier.getPath();
+            final var name = path.substring(path.lastIndexOf('/') + 1);
+
+            // Check if the pack has already acknowledged the warnings in this file,
+            // in this case we report a different info log about the situation
+            if (ignoredShaders.contains(name)) {
+                return;
+            }
+
+            // Check the path against known problem files
+            if (SHADER_PROGRAM_BLACKLIST.contains(name)) {
+                unsupportedShaderPrograms.add(path);
+            } else if (SHADER_INCLUDE_BLACKLIST.contains(name)) {
+                unsupportedShaderIncludes.add(path);
             }
         });
 
-        if (detectedResourcePacks.containsValue(MessageLevel.SEVERE)) {
-            showConsoleMessage(Text.translatable("sodium.console.core_shaders_error"), MessageLevel.SEVERE);
+        return new ScannedResourcePack(resourcePack, unsupportedShaderPrograms, unsupportedShaderIncludes);
+    }
 
-            for (Map.Entry<String, MessageLevel> entry : detectedResourcePacks.entrySet()) {
+    private static boolean isExternalResourcePack(ResourcePack pack) {
+        return pack instanceof DirectoryResourcePack || pack instanceof ZipResourcePack;
+    }
 
-                if (entry.getValue() == MessageLevel.SEVERE) {
-                    // Omit 'file/' prefix for the in-game message
-                    var message = entry.getKey().startsWith("file/") ? entry.getKey().substring(5) : entry.getKey();
-                    showConsoleMessage(Text.literal(message), MessageLevel.SEVERE);
-                }
-            }
-        }
+    private static String getResourcePackName(ResourcePack pack) {
+        var path = pack.getName();
 
-        if (detectedResourcePacks.containsValue(MessageLevel.WARN)) {
-            showConsoleMessage(Text.translatable("sodium.console.core_shaders_warn"), MessageLevel.WARN);
-
-            for (Map.Entry<String, MessageLevel> entry : detectedResourcePacks.entrySet()) {
-
-                if (entry.getValue() == MessageLevel.WARN) {
-                    // Omit 'file/' prefix for the in-game message
-                    var message = entry.getKey().startsWith("file/") ? entry.getKey().substring(5) : entry.getKey();
-                    showConsoleMessage(Text.literal(message), MessageLevel.WARN);
-                }
-            }
-        }
-
-        if (!detectedResourcePacks.isEmpty()) {
-            showConsoleMessage(Text.translatable("sodium.console.core_shaders_info"), MessageLevel.INFO);
-        }
+        // Omit 'file/' prefix for the in-game message
+        return path.startsWith("file/") ? path.substring(5) : path;
     }
 
     /**
@@ -143,7 +205,13 @@ public class ResourcePackScanner {
     }
 
     private static void showConsoleMessage(MutableText message, MessageLevel messageLevel) {
-        Console.instance().logMessage(messageLevel, message, 20.0);
+        Console.instance().logMessage(messageLevel, message, 12.5);
     }
 
+    private record ScannedResourcePack(ResourcePack resourcePack,
+                                       ArrayList<String> shaderPrograms,
+                                       ArrayList<String> shaderIncludes)
+    {
+
+    }
 }
