@@ -24,6 +24,8 @@ public class SodiumGameOptions {
     public final PerformanceSettings performance = new PerformanceSettings();
     public final NotificationSettings notifications = new NotificationSettings();
 
+    public final PojavLauncherSettings pojav = new PojavLauncherSettings();
+
     private boolean readOnly;
 
     private Path configPath;
@@ -63,6 +65,10 @@ public class SodiumGameOptions {
 
     public static class NotificationSettings {
         public boolean hideDonationButton = false;
+    }
+
+    public static class PojavLauncherSettings {
+        public boolean noLongerWarnPojavLauncher = false;
     }
 
     public enum GraphicsQuality implements TextProvider {
