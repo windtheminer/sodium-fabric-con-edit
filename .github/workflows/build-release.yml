@@ -1,7 +1,7 @@
 # Used when a release is pushed to GitHub
 # This does not make use of any caching as to ensure a clean build 
 # sodium 1.21 patched for pojav holy renderer
-name: build-release
+name: sodium-1.21-holy
 
 on:
   release:
