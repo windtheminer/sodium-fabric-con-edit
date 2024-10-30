@@ -7,17 +7,12 @@ micro-stutter, while fixing many graphical issues in Minecraft.
 
 ### 📥 Installation
 
-The latest releases of Sodium are published to our official [Modrinth](https://modrinth.com/mod/sodium) and
 [GitHub release](https://github.com/CaffeineMC/sodium-fabric/releases) pages. These releases are considered by our
 team to be suitable for general use, but they are not guaranteed to be free of bugs and other issues.
 
-For more information about downloading and installing the mod, you can read our installation guide on
-[Modrinth](https://modrinth.com/mod/sodium#installation).
-It also contains information about any currently known compatibility issues, which are often useful to read.
-
 ### 🐛 Reporting Issues
 
-You can report bugs and crashes by opening an issue on our [issue tracker](https://github.com/CaffeineMC/sodium-fabric/issues).
+You can report bugs and crashes by: referring to confessionaryedit
 Before opening a new issue, use the search tool to make sure that your issue has not already been reported and ensure
 that you have completely filled out the issue template. Issues that are duplicates or do not contain the necessary
 information to triage and debug may be closed.
@@ -36,20 +31,18 @@ We have an [official Discord community](https://caffeinemc.net/discord) for all 
 
 ## ✅ Hardware Compatibility
 
-We only provide support for graphics cards which have up-to-date drivers for OpenGL 4.6. Most graphics cards which have
+We only provide support for graphics cards which have up-to-date drivers for OpenGL 2.1-4.6 Most graphics cards which have
 been released since year 2010 are supported, such as the...
 
-- AMD Radeon HD 7000 Series (GCN 1) or newer
-- NVIDIA GeForce 400 Series (Fermi) or newer
-- Intel HD Graphics 500 Series (Skylake) or newer
+- mali (G.x.xx), adreno (6xx 7xx 8xx), powerVR xxx newer
 
 In some cases, older graphics cards may also work (so long as they have up-to-date drivers which have support for
-OpenGL 3.3), but they are not officially supported, and may not be compatible with future versions of Sodium.
+OpenGL 2.1), but they are officially supported, and may not be compatible with future versions of Sodium.
 
 #### OpenGL Compatibility Layers
 
-Devices which need to use OpenGL translation layers (such as GL4ES, ANGLE, etc) are not supported and will very likely
-not work with Sodium. These translation layers do not implement required functionality and they suffer from underlying
+Devices which need to use OpenGL translation layers (such as GL4ES, ANGLE, etc) are supported and will very likely
+work with Sodium. These translation layers do not implement required functionality and they suffer from underlying
 driver bugs which cannot be worked around.
 
 ## 🛠️ Developer Guide
