@@ -1,6 +1,6 @@
 # Used when a release is pushed to GitHub
 # This does not make use of any caching as to ensure a clean build 
-# sodium for pojav 1.21 holy
+# sodium for pojav 1.21 holyg4es
 name: build-release
 
 on:
